@@ -86,6 +86,18 @@ nixos.firefox              A web browser built from Firefox source tree
 1. **Caching**: The script saves package information to a unique cache file in `/tmp`. The cache is refreshed automatically if it's older than 24 hours, or can be forced to refresh using the `-f` flag.
 2. **Matching and Highlighting**: The tool provides multiple matching modes to customize the search behavior. It highlights matching terms in red by default, which can be disabled with the `--no-color` option.
 
+
+### Global Usage
+
+The provided nixos-scan-packages.nix can be imported into your configuration.nix and used to map the script to a unique command name for easy usage from any terminal.  Update the path to your local copy.  The example maps the command to "ca", allowing you to run the script from anywhere, such as
+```bash
+ca firefox
+```
+or
+```bash
+ca -e firefox
+```
+
 ## Code Structure
 
 - **`highlight_matches`**: Highlights the matched search term in the output line.
