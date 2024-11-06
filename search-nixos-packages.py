@@ -38,17 +38,25 @@ def update_cache(cache_file):
         print(f"Error writing to cache file: {e}", file=sys.stderr)
         sys.exit(1)
 
-def highlight_matches(line, search_term):
-    pattern = re.compile(f'({re.escape(search_term)})', re.IGNORECASE)
+def highlight_matches(line, search_term, exact_match=False):
+    if exact_match:
+        pattern = re.compile(f'({re.escape(search_term)})')
+    else:
+        pattern = re.compile(f'({re.escape(search_term)})', re.IGNORECASE)
     return pattern.sub(f'{RED}\\1{RESET}', line)
 
-def search_packages(cache_file, search_term):
+def search_packages(cache_file, search_term, exact_match=False):
     try:
         with open(cache_file, 'r') as f:
             for line in f:
-                if search_term.lower() in line.lower():
-                    # Highlight all occurrences of the search term
-                    highlighted_line = highlight_matches(line.strip(), search_term)
+                matches = False
+                if exact_match:
+                    matches = search_term in line
+                else:
+                    matches = search_term.lower() in line.lower()
+                
+                if matches:
+                    highlighted_line = highlight_matches(line.strip(), search_term, exact_match)
                     print(highlighted_line)
     except IOError as e:
         print(f"Error reading cache file: {e}", file=sys.stderr)
@@ -59,6 +67,8 @@ def main():
     parser.add_argument('search_term', help='Term to search for in package names and descriptions')
     parser.add_argument('-f', '--force', action='store_true', 
                         help='Force refresh of package cache')
+    parser.add_argument('-e', '--exact', action='store_true',
+                        help='Exact match (case sensitive)')
     parser.add_argument('--no-color', action='store_true',
                         help='Disable colored output')
     args = parser.parse_args()
@@ -81,9 +91,9 @@ def main():
             print("Cache is older than 24 hours. Updating...")
             update_cache(cache_file)
 
-    print(f"Searching for: {args.search_term}")
+    print(f"Searching for: {args.search_term} ({'exact match' if args.exact else 'case insensitive'})")
     print("-" * 40)
-    search_packages(cache_file, args.search_term)
+    search_packages(cache_file, args.search_term, args.exact)
 
 if __name__ == "__main__":
     main()
