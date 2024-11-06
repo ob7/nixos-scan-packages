@@ -39,25 +39,46 @@ def update_cache(cache_file):
         sys.exit(1)
 
 def highlight_matches(line, search_term, match_type='normal'):
-    if match_type == 'exact':
+    if match_type == 'case_sensitive':  # -x
         pattern = re.compile(f'({re.escape(search_term)})')
-    elif match_type == 'strict':
-        pattern = re.compile(f'(\\b{re.escape(search_term)}\\b)')
-    else:
+    elif match_type == 'word_boundary':  # -xx
+        pattern = re.compile(f'\\b({re.escape(search_term)})\\b')
+    elif match_type == 'end_boundary':   # -xxx
+        pattern = re.compile(f'({re.escape(search_term)})(?=$|\\s)')
+    elif match_type == 'exact_component': # -xxxx
+        # Match start of line or dot, capture the search term, and ensure it ends at whitespace or end of line
+        pattern = re.compile(f'(^|\\.)({re.escape(search_term)})(?=$|\\s)')
+    else:  # normal case-insensitive
         pattern = re.compile(f'({re.escape(search_term)})', re.IGNORECASE)
-    return pattern.sub(f'{RED}\\1{RESET}', line)
+
+    # Apply the substitution, handling boundaries properly for exact_component
+    if match_type == 'exact_component':
+        return pattern.sub(lambda m: f'{m.group(1)}{RED}{m.group(2)}{RESET}', line)
+    else:
+        return pattern.sub(f'{RED}\\1{RESET}', line)
+
 
 def search_packages(cache_file, search_term, match_type='normal'):
     try:
         with open(cache_file, 'r') as f:
             for line in f:
                 matches = False
-                if match_type == 'exact':
+                # Split the line into package name and description
+                parts = line.strip().split(None, 1)
+                if not parts:
+                    continue
+                    
+                package_name = parts[0]
+                
+                if match_type == 'case_sensitive':  # -x
                     matches = search_term in line
-                elif match_type == 'strict':
-                    # Use word boundaries for strict matching
-                    matches = re.search(f'\\b{re.escape(search_term)}\\b', line) is not None
-                else:
+                elif match_type == 'word_boundary':  # -xx
+                    matches = bool(re.search(f'\\b{re.escape(search_term)}\\b', line))
+                elif match_type == 'end_boundary':   # -xxx
+                    matches = bool(re.search(f'{re.escape(search_term)}(?:$|\\s)', package_name))
+                elif match_type == 'exact_component': # -xxxx
+                    matches = bool(re.search(f'(?:^|\\.)' + re.escape(search_term) + '(?:$|\\s)', package_name))
+                else:  # normal case-insensitive
                     matches = search_term.lower() in line.lower()
                 
                 if matches:
@@ -73,9 +94,15 @@ def main():
     parser.add_argument('-f', '--force', action='store_true', 
                         help='Force refresh of package cache')
     parser.add_argument('-x', action='store_true',
-                        help='Exact match (case sensitive)')
+                        help='Case sensitive match')
     parser.add_argument('-xx', action='store_true',
-                        help='Strict exact match (case sensitive, word boundaries)')
+                        help='Match whole words only')
+    parser.add_argument('-xxx', action='store_true',
+                        help='Match at end of package names')
+    parser.add_argument('-xxxx', action='store_true',
+                        help='Match exact package name components only')
+    parser.add_argument('-e', action='store_true',
+                        help='Most strict matching (same as -xxxx)')
     parser.add_argument('--no-color', action='store_true',
                         help='Disable colored output')
     args = parser.parse_args()
@@ -98,16 +125,23 @@ def main():
             print("Cache is older than 24 hours. Updating...")
             update_cache(cache_file)
 
+    # Determine match type (most specific flag wins)
     match_type = 'normal'
-    if args.xx:
-        match_type = 'strict'
+    if args.e or args.xxxx:
+        match_type = 'exact_component'
+    elif args.xxx:
+        match_type = 'end_boundary'
+    elif args.xx:
+        match_type = 'word_boundary'
     elif args.x:
-        match_type = 'exact'
+        match_type = 'case_sensitive'
 
     match_description = {
         'normal': 'case insensitive',
-        'exact': 'case sensitive',
-        'strict': 'strict boundaries, case sensitive'
+        'case_sensitive': 'case sensitive',
+        'word_boundary': 'whole words only',
+        'end_boundary': 'matches at end of names',
+        'exact_component': 'exact package name components only'
     }
 
     print(f"Searching for: {args.search_term} ({match_description[match_type]})")
