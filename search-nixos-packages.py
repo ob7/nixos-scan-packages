@@ -6,10 +6,13 @@ import os
 import hashlib
 import sys
 from datetime import datetime
+import re
+
+# ANSI color codes for highlighting
+RED = '\033[91m'
+RESET = '\033[0m'
 
 def get_unique_cache_file():
-    # Create a unique filename based on username and script path
-    # This ensures different users and different script locations get different cache files
     username = os.getenv('USER', 'unknown')
     script_path = os.path.abspath(__file__)
     unique_string = f"{username}-{script_path}"
@@ -35,12 +38,18 @@ def update_cache(cache_file):
         print(f"Error writing to cache file: {e}", file=sys.stderr)
         sys.exit(1)
 
+def highlight_matches(line, search_term):
+    pattern = re.compile(f'({re.escape(search_term)})', re.IGNORECASE)
+    return pattern.sub(f'{RED}\\1{RESET}', line)
+
 def search_packages(cache_file, search_term):
     try:
         with open(cache_file, 'r') as f:
             for line in f:
                 if search_term.lower() in line.lower():
-                    print(line.strip())
+                    # Highlight all occurrences of the search term
+                    highlighted_line = highlight_matches(line.strip(), search_term)
+                    print(highlighted_line)
     except IOError as e:
         print(f"Error reading cache file: {e}", file=sys.stderr)
         sys.exit(1)
@@ -50,7 +59,15 @@ def main():
     parser.add_argument('search_term', help='Term to search for in package names and descriptions')
     parser.add_argument('-f', '--force', action='store_true', 
                         help='Force refresh of package cache')
+    parser.add_argument('--no-color', action='store_true',
+                        help='Disable colored output')
     args = parser.parse_args()
+
+    # Disable colors if requested or if output is not to a terminal
+    if args.no_color or not sys.stdout.isatty():
+        global RED, RESET
+        RED = ''
+        RESET = ''
 
     cache_file = get_unique_cache_file()
 
